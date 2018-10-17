@@ -509,3 +509,8 @@ function hangUp() {
 function callMe() {
     emitRoom({ type: "call me" });
 }
+
+(document.getElementById("startVideo") as HTMLButtonElement).onclick = startVideo;
+(document.getElementById("stopVideo") as HTMLButtonElement).onclick = stopVideo;
+(document.getElementById("connect") as HTMLButtonElement).onclick = connect;
+(document.getElementById("hangUp") as HTMLButtonElement).onclick = hangUp;
