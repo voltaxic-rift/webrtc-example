@@ -1,8 +1,8 @@
 <!doctype html>
 <html>
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <title>multi party</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>multi party</title>
 </head>
 <body>
 socket.io signaling for multi-party (trickle ICE)<br />
@@ -11,10 +11,13 @@ socket.io signaling for multi-party (trickle ICE)<br />
 &nbsp;
 <button type="button" id="connect">Connect</button>
 <button type="button" id="hangUp">Hang Up</button>
+&nbsp;
+<button type="button" id="captureVideo">Capture Video</button>
 <div>
-    <video id="local_video" autoplay style="width: 160px; height: 120px; border: 1px solid black;"></video>
+  <video id="local_video" autoplay style="width: 160px; height: 120px; border: 1px solid black;"></video>
 </div>
 <div id="container">
+  <canvas id="canvas"></canvas>
 </div>
 <!--
 <p>SDP to send:<br />

@@ -214,6 +214,22 @@ function startVideo() {
         });
 }
 
+function captureVideo() {
+    //videoのstreamをcanvasに書き出す方法
+    let canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    let ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    //videoの縦幅横幅を取得
+    let w = localVideo.offsetWidth;
+    let h = localVideo.offsetHeight;    
+    canvas.setAttribute("width", w.toString());
+    canvas.setAttribute("height", h.toString());
+    ctx.drawImage(localVideo, 0, 0, w, h);
+
+    //canvasを更にimgに書き出す方法chr
+    let img = document.getElementById('img') as HTMLImageElement;
+    img.src = canvas.toDataURL('image/png');
+}
+
 // stop local video
 function stopVideo() {
     pauseVideo(localVideo);
@@ -514,3 +530,4 @@ function callMe() {
 (document.getElementById("stopVideo") as HTMLButtonElement).onclick = stopVideo;
 (document.getElementById("connect") as HTMLButtonElement).onclick = connect;
 (document.getElementById("hangUp") as HTMLButtonElement).onclick = hangUp;
+(document.getElementById("captureVideo") as HTMLButtonElement).onclick = captureVideo;
