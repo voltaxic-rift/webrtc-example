@@ -397,28 +397,7 @@ function makeOffer(id: any) {
     addConnection(id, peerConnection);
 
     const dataChannel = peerConnection.createDataChannel("hoge");
-    dataChannel.onopen = e => {
-        if (isRemoteVideoAttached(id)) {
-            console.log("stream already attached, so ignore");
-        } else {
-            const mediaSource = new MediaSource();
-            mediaSource.onsourceopen = () => {
-                sourceBuffers[id] = mediaSource.addSourceBuffer('video/webm; codecs="opus,vp8"');
-
-                const recorder = new MediaRecorder(localStream!);
-                recorder.start(100);
-                recorder.ondataavailable = e => {
-                    const reader = new FileReader();
-                    reader.readAsArrayBuffer(e.data);
-                    reader.onload = () => dataChannel.send(reader.result as ArrayBuffer);
-                };
-            };
-            attachVideo(id, URL.createObjectURL(mediaSource));
-        }
-    };
-    dataChannel.onmessage = e => sourceBuffers[id].appendBuffer(e.data);
-    dataChannel.onerror = (ev) => console.log(ev);
-    dataChannel.onclose = (ev) => console.log(ev);
+    handleDataChannel(id, dataChannel);
 
     peerConnection.createOffer()
         .then(sessionDescription => {
@@ -445,6 +424,8 @@ function setOffer(id: any, sessionDescription: RTCSessionDescriptionInit) {
     const peerConnection = prepareNewConnection(id);
     addConnection(id, peerConnection);
 
+    peerConnection.ondatachannel = e => handleDataChannel(id, e.channel);
+
     peerConnection.setRemoteDescription(sessionDescription)
         .then(() => {
             console.log("setRemoteDescription(offer) succsess in promise");
@@ -461,32 +442,6 @@ function makeAnswer(id: any) {
         console.error("peerConnection NOT exist!");
         return;
     }
-
-    peerConnection.ondatachannel = e => {
-        const dataChannel = e.channel;
-        dataChannel.onopen = e => {
-            if (isRemoteVideoAttached(id)) {
-                console.log("stream already attached, so ignore");
-            } else {
-                const mediaSource = new MediaSource();
-                mediaSource.onsourceopen = () => {
-                    sourceBuffers[id] = mediaSource.addSourceBuffer('video/webm; codecs="opus,vp8"');
-    
-                    const recorder = new MediaRecorder(localStream!);
-                    recorder.start(100);
-                    recorder.ondataavailable = e => {
-                        const reader = new FileReader();
-                        reader.readAsArrayBuffer(e.data);
-                        reader.onload = () => dataChannel.send(reader.result as ArrayBuffer);
-                    };
-                };
-                attachVideo(id, URL.createObjectURL(mediaSource));
-            }
-        };
-        dataChannel.onmessage = e => sourceBuffers[id].appendBuffer(e.data);
-        dataChannel.onerror = (ev) => console.log(ev);
-        dataChannel.onclose = (ev) => console.log(ev);
-    };
 
     peerConnection.createAnswer()
         .then(sessionDescription => {
@@ -574,6 +529,34 @@ function hangUp() {
 
     emitRoom({ type: "bye" });
     stopAllConnection();
+}
+
+function handleDataChannel(id: any, dataChannel: RTCDataChannel) {
+    dataChannel.onopen = () => {
+        if (isRemoteVideoAttached(id)) {
+            console.log("stream already attached, so ignore");
+        } else {
+            const mediaSource = new MediaSource();
+            mediaSource.onsourceopen = () => {
+                sourceBuffers[id] = mediaSource.addSourceBuffer('video/webm; codecs="opus,vp8"');
+
+                const recorder = new MediaRecorder(localStream!);
+                recorder.start(1000);
+                recorder.ondataavailable = e => {
+                    console.log(e);
+                    const reader = new FileReader();
+                    reader.readAsArrayBuffer(e.data);
+                    reader.onload = () => {
+                        dataChannel.send(reader.result as ArrayBuffer);
+                    }
+                };
+            };
+            attachVideo(id, URL.createObjectURL(mediaSource));
+        }
+    };
+    dataChannel.onmessage = e => sourceBuffers[id].appendBuffer(e.data);
+    dataChannel.onerror = (ev) => console.log(ev);
+    dataChannel.onclose = (ev) => console.log(ev);
 }
 
 // ---- multi party --
