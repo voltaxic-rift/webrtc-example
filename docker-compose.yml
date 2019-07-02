@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    command: npm run start
+    ports:
+      - 8080:8080
+    volumes:
+      - .:/app
+  sig:
+    build: .
+    command: npm run sigstart
+    ports:
+      - 3002:3002
+    volumes:
+      - .:/app
