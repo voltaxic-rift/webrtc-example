@@ -10,6 +10,7 @@ let localStream: MediaStream | null = null;
 // ---- for multi party -----
 const peerConnections: RTCPeerConnection[] = [];
 // let remoteStreams = [];
+const sourceBuffers: SourceBuffer[] = [];
 const remoteVideos: HTMLVideoElement[] = [];
 const MAX_CONNECTION_COUNT = 5;
 
@@ -146,9 +147,9 @@ function stopAllConnection() {
 }
 
 // --- video elements ---
-function attachVideo(id: any, stream: MediaStream) {
+function attachVideo(id: any, source: string) {
     const video = addRemoteVideoElement(id);
-    playVideo(video, stream);
+    playVideo(video, source);
     video.volume = 1.0;
 }
 
@@ -249,11 +250,15 @@ function stopLocalStream(stream: MediaStream) {
     }
 }
 
-function playVideo(element: HTMLVideoElement, stream: MediaStream) {
+function playVideo(element: HTMLVideoElement, source: string | MediaStream) {
     if ("srcObject" in element) {
-        element.srcObject = stream;
+        if (typeof(source) === 'string') {
+            element.src = source;
+        } else {
+            element.srcObject = source;
+        }
     } else {
-        (element as HTMLVideoElement).src = window.URL.createObjectURL(stream);
+        (element as HTMLVideoElement).src = window.URL.createObjectURL(source);
     }
     element.play();
     element.volume = 0;
@@ -306,23 +311,23 @@ function prepareNewConnection(id: any) {
     const peer = new RTCPeerConnection(pc_config);
 
     // --- on get remote stream ---
-    peer.ontrack = event => {
-        const stream = event.streams[0];
-        console.log("-- peer.ontrack() stream.id=" + stream.id);
-        if (isRemoteVideoAttached(id)) {
-            console.log("stream already attached, so ignore");
-        } else {
-            // playVideo(remoteVideo, stream);
-            attachVideo(id, stream);
-        }
+    // peer.ontrack = event => {
+    //     const stream = event.streams[0];
+    //     console.log("-- peer.ontrack() stream.id=" + stream.id);
+    //     if (isRemoteVideoAttached(id)) {
+    //         console.log("stream already attached, so ignore");
+    //     } else {
+    //         // playVideo(remoteVideo, stream);
+    //         attachVideo(id, stream);
+    //     }
 
-        stream.onremovetrack = () => {
-            localStream!.getTracks().forEach(track => {
-                peer.removeTrack(peer.addTrack(track, localStream!));
-            });
-            detachVideo(id);
-        };
-    };
+    //     stream.onremovetrack = () => {
+    //         localStream!.getTracks().forEach(track => {
+    //             peer.removeTrack(peer.addTrack(track, localStream!));
+    //         });
+    //         detachVideo(id);
+    //     };
+    // };
 
     // --- on get local ICE candidate
     peer.onicecandidate = evt => {
@@ -375,14 +380,14 @@ function prepareNewConnection(id: any) {
     };
 
     // -- add local stream --
-    if (localStream) {
-        console.log("Adding local stream...");
-        localStream.getTracks().forEach(track => {
-            peer.addTrack(track, localStream!);
-        });
-    } else {
-        console.warn("no local stream, but continue.");
-    }
+    // if (localStream) {
+    //     console.log("Adding local stream...");
+    //     localStream.getTracks().forEach(track => {
+    //         peer.addTrack(track, localStream!);
+    //     });
+    // } else {
+    //     console.warn("no local stream, but continue.");
+    // }
 
     return peer;
 }
@@ -390,6 +395,30 @@ function prepareNewConnection(id: any) {
 function makeOffer(id: any) {
     const peerConnection = prepareNewConnection(id);
     addConnection(id, peerConnection);
+
+    const dataChannel = peerConnection.createDataChannel("hoge");
+    dataChannel.onopen = e => {
+        if (isRemoteVideoAttached(id)) {
+            console.log("stream already attached, so ignore");
+        } else {
+            const mediaSource = new MediaSource();
+            mediaSource.onsourceopen = () => {
+                sourceBuffers[id] = mediaSource.addSourceBuffer('video/webm; codecs="opus,vp8"');
+
+                const recorder = new MediaRecorder(localStream!);
+                recorder.start(100);
+                recorder.ondataavailable = e => {
+                    const reader = new FileReader();
+                    reader.readAsArrayBuffer(e.data);
+                    reader.onload = () => dataChannel.send(reader.result as ArrayBuffer);
+                };
+            };
+            attachVideo(id, URL.createObjectURL(mediaSource));
+        }
+    };
+    dataChannel.onmessage = e => sourceBuffers[id].appendBuffer(e.data);
+    dataChannel.onerror = (ev) => console.log(ev);
+    dataChannel.onclose = (ev) => console.log(ev);
 
     peerConnection.createOffer()
         .then(sessionDescription => {
@@ -432,6 +461,32 @@ function makeAnswer(id: any) {
         console.error("peerConnection NOT exist!");
         return;
     }
+
+    peerConnection.ondatachannel = e => {
+        const dataChannel = e.channel;
+        dataChannel.onopen = e => {
+            if (isRemoteVideoAttached(id)) {
+                console.log("stream already attached, so ignore");
+            } else {
+                const mediaSource = new MediaSource();
+                mediaSource.onsourceopen = () => {
+                    sourceBuffers[id] = mediaSource.addSourceBuffer('video/webm; codecs="opus,vp8"');
+    
+                    const recorder = new MediaRecorder(localStream!);
+                    recorder.start(100);
+                    recorder.ondataavailable = e => {
+                        const reader = new FileReader();
+                        reader.readAsArrayBuffer(e.data);
+                        reader.onload = () => dataChannel.send(reader.result as ArrayBuffer);
+                    };
+                };
+                attachVideo(id, URL.createObjectURL(mediaSource));
+            }
+        };
+        dataChannel.onmessage = e => sourceBuffers[id].appendBuffer(e.data);
+        dataChannel.onerror = (ev) => console.log(ev);
+        dataChannel.onclose = (ev) => console.log(ev);
+    };
 
     peerConnection.createAnswer()
         .then(sessionDescription => {
